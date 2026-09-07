@@ -1,34 +1,34 @@
-import { useState, useEffect } from 'react';
-import { Html5QrcodeScanner } from 'html5-qrcode';
+import { useState, useEffect, useRef } from 'react';
+import { Html5Qrcode } from 'html5-qrcode';
 import './index.css';
 
 function App() {
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
   const [isScanning, setIsScanning] = useState(false);
+  const html5QrCodeRef = useRef(null);
 
   useEffect(() => {
-    let scanner = null;
     if (isScanning) {
-      scanner = new Html5QrcodeScanner("qr-reader", { 
-        fps: 10, 
-        qrbox: { width: 250, height: 250 },
-        aspectRatio: 1.0,
-      }, false);
+      // Initialize the core Html5Qrcode class
+      const html5QrCode = new Html5Qrcode("full-screen-reader");
+      html5QrCodeRef.current = html5QrCode;
 
-      scanner.render(
+      const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+
+      // Force rear camera
+      html5QrCode.start(
+        { facingMode: "environment" },
+        config,
         (decodedText) => {
+          // Success callback
           try {
-            // decodedText format: upi://pay?pa=merchant@upi&pn=Merchant&am=100&cu=INR
-            // Handle both valid URL format and raw parameter formats if any
             let urlString = decodedText;
             if (!urlString.startsWith('upi://')) {
-               // Sometimes raw pa values might be returned, though rare for UPI QR
                alert("Not a standard UPI QR code.");
                return;
             }
 
-            // Using URL object to easily extract parameters
             const url = new URL(urlString);
             if (url.protocol === 'upi:') {
               const params = new URLSearchParams(url.search);
@@ -36,11 +36,29 @@ function App() {
               const am = params.get('am');
               
               if (pa) setRecipient(pa);
-              if (am) setAmount(am);
               
-              // Stop scanning on success
-              setIsScanning(false);
-              scanner.clear();
+              if (am) {
+                // If amount is present, set it and instantly redirect!
+                setAmount(am);
+                
+                let redirectPa = pa;
+                if (/^\d{10}$/.test(redirectPa)) {
+                  redirectPa = `${redirectPa}@ybl`;
+                }
+
+                const upiLink = `super://pay?pa=${encodeURIComponent(redirectPa)}&pn=${encodeURIComponent('Payment')}&am=${encodeURIComponent(am)}&cu=INR`;
+                
+                // Stop scanning and redirect
+                html5QrCode.stop().then(() => {
+                  setIsScanning(false);
+                  window.location.href = upiLink;
+                });
+              } else {
+                // No amount found, just prefill and let user enter amount
+                html5QrCode.stop().then(() => {
+                  setIsScanning(false);
+                });
+              }
             } else {
               alert("Please scan a valid UPI QR code.");
             }
@@ -48,16 +66,21 @@ function App() {
             console.error(e);
             alert("Invalid QR code format.");
           }
-        }, 
+        },
         (error) => {
-          // Ignore general read errors (happens constantly while waiting for a good frame)
+          // Ignore read errors, wait for a good frame
         }
-      );
+      ).catch((err) => {
+        console.error("Error starting camera", err);
+        alert("Could not start camera. Please ensure permissions are granted and you are on a secure connection (HTTPS).");
+        setIsScanning(false);
+      });
     }
 
     return () => {
-      if (scanner) {
-        scanner.clear().catch(e => console.error("Failed to clear scanner", e));
+      // Cleanup on unmount or when scanning is toggled off
+      if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
+        html5QrCodeRef.current.stop().catch(e => console.error("Failed to stop scanner", e));
       }
     };
   }, [isScanning]);
@@ -67,10 +90,7 @@ function App() {
     if (!recipient || !amount) return;
 
     let pa = recipient;
-
-    // Check if it's a 10 digit number without @
-    const isPhoneNumber = /^\d{10}$/.test(pa);
-    if (isPhoneNumber) {
+    if (/^\d{10}$/.test(pa)) {
       pa = `${pa}@ybl`;
     }
 
@@ -79,26 +99,15 @@ function App() {
   };
 
   return (
-    <div className="container">
-      <div className="glass-card">
-        <div className="logo-container">
-          <div className="logo-icon">S</div>
-          <h1>Super.money</h1>
-        </div>
-        <p className="subtitle">Send money instantly via UPI</p>
-        
-        {isScanning ? (
-          <div className="scanner-container">
-            <div id="qr-reader"></div>
-            <button 
-              type="button" 
-              className="cancel-scan-button"
-              onClick={() => setIsScanning(false)}
-            >
-              Cancel Scanning
-            </button>
+    <>
+      <div className="container">
+        <div className="glass-card">
+          <div className="logo-container">
+            <div className="logo-icon">S</div>
+            <h1>Super.money</h1>
           </div>
-        ) : (
+          <p className="subtitle">Send money instantly via UPI</p>
+          
           <form onSubmit={handlePayment} className="payment-form">
             <button 
               type="button" 
@@ -159,9 +168,44 @@ function App() {
               </svg>
             </button>
           </form>
-        )}
+        </div>
       </div>
-    </div>
+
+      {isScanning && (
+        <div className="fullscreen-scanner-overlay">
+          <div id="full-screen-reader" className="fullscreen-reader"></div>
+          
+          <div className="scanner-ui">
+            <div className="scanner-header">
+              <h2>Scan to Pay</h2>
+              <p>Point your camera at any UPI QR code</p>
+            </div>
+            
+            <div className="viewfinder">
+              <div className="corner top-left"></div>
+              <div className="corner top-right"></div>
+              <div className="corner bottom-left"></div>
+              <div className="corner bottom-right"></div>
+            </div>
+
+            <button 
+              className="cancel-fullscreen-btn" 
+              onClick={() => {
+                if (html5QrCodeRef.current) {
+                  html5QrCodeRef.current.stop().then(() => {
+                    setIsScanning(false);
+                  });
+                } else {
+                  setIsScanning(false);
+                }
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
