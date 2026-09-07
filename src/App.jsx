@@ -43,7 +43,17 @@ function App() {
           preferredCamera: 'environment',
           highlightScanRegion: false,
           highlightCodeOutline: false,
-          maxScansPerSecond: 10,
+          maxScansPerSecond: 30,
+          calculateScanRegion: (video) => {
+             const size = Math.min(video.videoWidth, video.videoHeight);
+             const scanAreaSize = Math.min(size, 400); 
+             return {
+                 x: (video.videoWidth - scanAreaSize) / 2,
+                 y: (video.videoHeight - scanAreaSize) / 2,
+                 width: scanAreaSize,
+                 height: scanAreaSize,
+             };
+          }
         }
       );
       
@@ -58,6 +68,7 @@ function App() {
 
     return () => {
       if (scannerRef.current) {
+        scannerRef.current.stop();
         scannerRef.current.destroy();
         scannerRef.current = null;
       }
@@ -201,8 +212,8 @@ function App() {
 
       {isScanning && (
         <div className="fullscreen-scanner-overlay">
-          {/* Nimiq qr-scanner requires a raw video element */}
-          <video ref={videoRef} className="fullscreen-reader"></video>
+          {/* Nimiq qr-scanner requires a raw video element with these attributes on iOS */}
+          <video ref={videoRef} className="fullscreen-reader" playsInline autoPlay muted></video>
           
           <div className="scanner-ui">
             <div className="scanner-header">
