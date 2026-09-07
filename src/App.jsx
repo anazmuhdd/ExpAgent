@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Html5Qrcode } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import './index.css';
 
 function App() {
@@ -14,7 +14,14 @@ function App() {
       const html5QrCode = new Html5Qrcode("full-screen-reader");
       html5QrCodeRef.current = html5QrCode;
 
-      const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+      const config = { 
+        fps: 30, 
+        qrbox: { width: 260, height: 260 },
+        formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ],
+        experimentalFeatures: {
+          useBarCodeDetectorIfSupported: true
+        }
+      };
 
       // Force rear camera
       html5QrCode.start(
