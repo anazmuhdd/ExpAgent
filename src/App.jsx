@@ -10,27 +10,14 @@ function App() {
   
   const videoRef = useRef(null);
   const scannerRef = useRef(null);
-
-  const startScanningFlow = async () => {
-    try {
-      // iOS Safari Bug Fix: Pre-request permissions before mounting the scanner
-      // This prevents the permission dialog from hanging the video stream
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      // Stop this temporary stream immediately
-      stream.getTracks().forEach(track => track.stop());
-      
-      // Now mount the scanner UI, knowing permissions are already granted
-      setIsScanning(true);
-    } catch (err) {
-      alert("Please allow camera permissions to scan QR codes.");
-      console.error(err);
-    }
-  };
+  
+  // Pinch-to-zoom state
+  const zoomLevelRef = useRef(1);
+  const initialPinchDistance = useRef(null);
 
   const addLog = (msg) => {
     setLogs(prev => {
       const newLogs = [...prev, `${new Date().toLocaleTimeString()} - ${msg}`];
-      // Keep only last 10 logs to avoid clutter
       return newLogs.slice(-10);
     });
   };
@@ -44,7 +31,6 @@ function App() {
         if (hasCamera) {
           QrScanner.listCameras(true).then(cameras => {
             addLog(`Found ${cameras.length} cameras`);
-            cameras.forEach(c => addLog(`- ${c.label || 'Unknown'}`));
           });
         }
       });
@@ -77,6 +63,15 @@ function App() {
       
       scanner.start().then(() => {
         addLog("Camera started successfully.");
+        
+        // Apply continuous auto-focus if supported on this iOS device
+        if (videoRef.current && videoRef.current.srcObject) {
+           const track = videoRef.current.srcObject.getVideoTracks()[0];
+           if (track) {
+               track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] })
+                    .catch(e => addLog("Continuous focus not supported"));
+           }
+        }
       }).catch(err => {
         addLog(`ERROR starting camera: ${err}`);
       });
@@ -153,6 +148,55 @@ function App() {
     window.location.href = upiLink;
   };
 
+  // Pinch-to-zoom logic
+  const getPinchDistance = (e) => {
+    if (e.touches.length !== 2) return null;
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
+
+  const handleTouchStart = (e) => {
+    if (e.touches.length === 2) {
+      initialPinchDistance.current = getPinchDistance(e);
+    }
+  };
+
+  const handleTouchMove = (e) => {
+    if (e.touches.length === 2 && initialPinchDistance.current) {
+      const currentDistance = getPinchDistance(e);
+      const scale = currentDistance / initialPinchDistance.current;
+      
+      let newZoom = zoomLevelRef.current * scale;
+      // Soft limits before checking hardware capabilities
+      newZoom = Math.max(1, Math.min(newZoom, 10)); 
+      
+      applyZoom(newZoom);
+      zoomLevelRef.current = newZoom;
+      initialPinchDistance.current = currentDistance; 
+    }
+  };
+
+  const applyZoom = (zoomValue) => {
+    if (!videoRef.current || !videoRef.current.srcObject) return;
+    const track = videoRef.current.srcObject.getVideoTracks()[0];
+    if (track) {
+      try {
+        const capabilities = track.getCapabilities ? track.getCapabilities() : {};
+        if (capabilities.zoom) {
+          const min = capabilities.zoom.min || 1;
+          const max = capabilities.zoom.max || 5;
+          const clampedZoom = Math.max(min, Math.min(zoomValue, max));
+          
+          track.applyConstraints({ advanced: [{ zoom: clampedZoom }] })
+               .catch(e => { /* silently fail if not supported */ });
+        }
+      } catch (e) {
+        // Browser might not support getCapabilities
+      }
+    }
+  };
+
   return (
     <>
       <div className="container">
@@ -167,7 +211,7 @@ function App() {
             <button 
               type="button" 
               className="scan-button"
-              onClick={startScanningFlow}
+              onClick={() => setIsScanning(true)}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M3 7V5a2 2 0 0 1 2-2h2"></path>
@@ -227,14 +271,18 @@ function App() {
       </div>
 
       {isScanning && (
-        <div className="fullscreen-scanner-overlay">
+        <div 
+          className="fullscreen-scanner-overlay"
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+        >
           {/* Nimiq qr-scanner requires a raw video element with these attributes on iOS */}
           <video ref={videoRef} className="fullscreen-reader" playsInline autoPlay muted></video>
           
           <div className="scanner-ui">
             <div className="scanner-header">
               <h2>Scan to Pay</h2>
-              <p>Point your camera at any UPI QR code</p>
+              <p>Point or Pinch-to-Zoom at any UPI QR code</p>
             </div>
             
             <div className="viewfinder">
