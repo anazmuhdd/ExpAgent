@@ -11,6 +11,22 @@ function App() {
   const videoRef = useRef(null);
   const scannerRef = useRef(null);
 
+  const startScanningFlow = async () => {
+    try {
+      // iOS Safari Bug Fix: Pre-request permissions before mounting the scanner
+      // This prevents the permission dialog from hanging the video stream
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      // Stop this temporary stream immediately
+      stream.getTracks().forEach(track => track.stop());
+      
+      // Now mount the scanner UI, knowing permissions are already granted
+      setIsScanning(true);
+    } catch (err) {
+      alert("Please allow camera permissions to scan QR codes.");
+      console.error(err);
+    }
+  };
+
   const addLog = (msg) => {
     setLogs(prev => {
       const newLogs = [...prev, `${new Date().toLocaleTimeString()} - ${msg}`];
@@ -151,7 +167,7 @@ function App() {
             <button 
               type="button" 
               className="scan-button"
-              onClick={() => setIsScanning(true)}
+              onClick={startScanningFlow}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M3 7V5a2 2 0 0 1 2-2h2"></path>
