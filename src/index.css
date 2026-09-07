@@ -178,21 +178,25 @@ input[type=number] {
   margin-left: 4px;
 }
 
-.pay-button {
-  margin-top: 8px;
-  background: var(--primary-color);
-  color: white;
-  border: none;
-  padding: 18px;
-  border-radius: 16px;
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
+/* Buttons */
+.pay-button, .scan-button {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 12px;
+  border: none;
+  border-radius: 16px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
   transition: all 0.3s ease;
+}
+
+.pay-button {
+  margin-top: 8px;
+  background: var(--primary-color);
+  color: white;
+  padding: 18px;
   box-shadow: 0 4px 12px rgba(108, 92, 231, 0.3);
 }
 
@@ -212,4 +216,79 @@ input[type=number] {
 
 .pay-button:hover svg {
   transform: translateX(4px);
+}
+
+.scan-button {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+  padding: 16px;
+  border: 1px solid var(--glass-border);
+}
+
+.scan-button:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Divider */
+.divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin: 4px 0;
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.divider span {
+  padding: 0 16px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+/* Scanner styles */
+.scanner-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  animation: slideUp 0.4s ease;
+}
+
+#qr-reader {
+  width: 100%;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  background: var(--input-bg);
+}
+
+#qr-reader video {
+  border-radius: 16px;
+}
+
+#qr-reader__dashboard_section_csr span {
+  color: var(--text-secondary) !important;
+}
+
+.cancel-scan-button {
+  background: rgba(255, 107, 107, 0.1);
+  color: #FF6B6B;
+  border: 1px solid rgba(255, 107, 107, 0.2);
+  padding: 14px;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cancel-scan-button:hover {
+  background: rgba(255, 107, 107, 0.2);
 }
