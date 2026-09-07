@@ -1,96 +1,117 @@
 import { useState, useEffect, useRef } from 'react';
-import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
+import QrScanner from 'qr-scanner';
 import './index.css';
 
 function App() {
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
   const [isScanning, setIsScanning] = useState(false);
-  const html5QrCodeRef = useRef(null);
+  const [logs, setLogs] = useState([]);
+  
+  const videoRef = useRef(null);
+  const scannerRef = useRef(null);
+
+  const addLog = (msg) => {
+    setLogs(prev => {
+      const newLogs = [...prev, `${new Date().toLocaleTimeString()} - ${msg}`];
+      // Keep only last 10 logs to avoid clutter
+      return newLogs.slice(-10);
+    });
+  };
 
   useEffect(() => {
-    if (isScanning) {
-      // Initialize the core Html5Qrcode class
-      const html5QrCode = new Html5Qrcode("full-screen-reader");
-      html5QrCodeRef.current = html5QrCode;
-
-      const config = { 
-        fps: 30, 
-        qrbox: { width: 260, height: 260 },
-        formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ],
-        experimentalFeatures: {
-          useBarCodeDetectorIfSupported: true
+    if (isScanning && videoRef.current) {
+      addLog("Initializing Nimiq QrScanner...");
+      
+      QrScanner.hasCamera().then(hasCamera => {
+        addLog(`Camera detected: ${hasCamera}`);
+        if (hasCamera) {
+          QrScanner.listCameras(true).then(cameras => {
+            addLog(`Found ${cameras.length} cameras`);
+            cameras.forEach(c => addLog(`- ${c.label || 'Unknown'}`));
+          });
         }
-      };
+      });
 
-      // Force rear camera
-      html5QrCode.start(
-        { facingMode: "environment" },
-        config,
-        (decodedText) => {
-          // Success callback
-          try {
-            let urlString = decodedText;
-            if (!urlString.startsWith('upi://')) {
-               alert("Not a standard UPI QR code.");
-               return;
-            }
-
-            const url = new URL(urlString);
-            if (url.protocol === 'upi:') {
-              const params = new URLSearchParams(url.search);
-              const pa = params.get('pa');
-              const am = params.get('am');
-              
-              if (pa) setRecipient(pa);
-              
-              if (am) {
-                // If amount is present, set it and instantly redirect!
-                setAmount(am);
-                
-                let redirectPa = pa;
-                if (/^\d{10}$/.test(redirectPa)) {
-                  redirectPa = `${redirectPa}@ybl`;
-                }
-
-                const upiLink = `super://pay?pa=${encodeURIComponent(redirectPa)}&pn=${encodeURIComponent('Payment')}&am=${encodeURIComponent(am)}&cu=INR`;
-                
-                // Stop scanning and redirect
-                html5QrCode.stop().then(() => {
-                  setIsScanning(false);
-                  window.location.href = upiLink;
-                });
-              } else {
-                // No amount found, just prefill and let user enter amount
-                html5QrCode.stop().then(() => {
-                  setIsScanning(false);
-                });
-              }
-            } else {
-              alert("Please scan a valid UPI QR code.");
-            }
-          } catch (e) {
-            console.error(e);
-            alert("Invalid QR code format.");
-          }
+      const scanner = new QrScanner(
+        videoRef.current,
+        (result) => {
+          addLog(`SCANNED: ${result.data}`);
+          handleScanSuccess(result.data);
         },
-        (error) => {
-          // Ignore read errors, wait for a good frame
+        {
+          preferredCamera: 'environment',
+          highlightScanRegion: false,
+          highlightCodeOutline: false,
+          maxScansPerSecond: 10,
         }
-      ).catch((err) => {
-        console.error("Error starting camera", err);
-        alert("Could not start camera. Please ensure permissions are granted and you are on a secure connection (HTTPS).");
-        setIsScanning(false);
+      );
+      
+      scannerRef.current = scanner;
+      
+      scanner.start().then(() => {
+        addLog("Camera started successfully.");
+      }).catch(err => {
+        addLog(`ERROR starting camera: ${err}`);
       });
     }
 
     return () => {
-      // Cleanup on unmount or when scanning is toggled off
-      if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
-        html5QrCodeRef.current.stop().catch(e => console.error("Failed to stop scanner", e));
+      if (scannerRef.current) {
+        scannerRef.current.destroy();
+        scannerRef.current = null;
       }
     };
   }, [isScanning]);
+
+  const handleScanSuccess = (decodedText) => {
+    try {
+      let urlString = decodedText;
+      if (!urlString.startsWith('upi://')) {
+          addLog("Result is not a standard UPI URL.");
+          return;
+      }
+
+      const url = new URL(urlString);
+      if (url.protocol === 'upi:') {
+        const params = new URLSearchParams(url.search);
+        const pa = params.get('pa');
+        const am = params.get('am');
+        
+        if (pa) {
+          setRecipient(pa);
+          addLog(`Extracted UPI ID: ${pa}`);
+        }
+        
+        if (am) {
+          setAmount(am);
+          addLog(`Extracted Amount: ${am}`);
+          
+          let redirectPa = pa;
+          if (/^\d{10}$/.test(redirectPa)) {
+            redirectPa = `${redirectPa}@ybl`;
+          }
+
+          const upiLink = `super://pay?pa=${encodeURIComponent(redirectPa)}&pn=${encodeURIComponent('Payment')}&am=${encodeURIComponent(am)}&cu=INR`;
+          addLog(`Redirecting to super://pay...`);
+          
+          if (scannerRef.current) {
+            scannerRef.current.stop();
+          }
+          setIsScanning(false);
+          window.location.href = upiLink;
+        } else {
+          addLog(`No amount found. Closing scanner.`);
+          if (scannerRef.current) {
+            scannerRef.current.stop();
+          }
+          setIsScanning(false);
+        }
+      }
+    } catch (e) {
+      addLog(`Parse error: ${e.message}`);
+    }
+  };
 
   const handlePayment = (e) => {
     e.preventDefault();
@@ -180,7 +201,8 @@ function App() {
 
       {isScanning && (
         <div className="fullscreen-scanner-overlay">
-          <div id="full-screen-reader" className="fullscreen-reader"></div>
+          {/* Nimiq qr-scanner requires a raw video element */}
+          <video ref={videoRef} className="fullscreen-reader"></video>
           
           <div className="scanner-ui">
             <div className="scanner-header">
@@ -195,17 +217,17 @@ function App() {
               <div className="corner bottom-right"></div>
             </div>
 
+            {/* Debug Console UI */}
+            <div className="debug-console">
+              <strong>Debug Logs:</strong>
+              {logs.map((log, i) => (
+                <div key={i} className="debug-log-item">{log}</div>
+              ))}
+            </div>
+
             <button 
               className="cancel-fullscreen-btn" 
-              onClick={() => {
-                if (html5QrCodeRef.current) {
-                  html5QrCodeRef.current.stop().then(() => {
-                    setIsScanning(false);
-                  });
-                } else {
-                  setIsScanning(false);
-                }
-              }}
+              onClick={() => setIsScanning(false)}
             >
               Cancel
             </button>

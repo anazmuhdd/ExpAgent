@@ -376,8 +376,40 @@ input[type=number] {
   cursor: pointer;
   z-index: 10;
   transition: all 0.3s ease;
+  margin-top: 10px;
 }
 
 .cancel-fullscreen-btn:hover {
   background: rgba(255, 255, 255, 0.3);
+}
+
+.debug-console {
+  background: rgba(0, 0, 0, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #00ff00;
+  width: 90%;
+  max-width: 400px;
+  height: 120px;
+  overflow-y: auto;
+  border-radius: 12px;
+  padding: 10px;
+  font-family: monospace;
+  font-size: 11px;
+  z-index: 10;
+  text-align: left;
+  margin-top: 20px;
+  pointer-events: auto;
+}
+
+.debug-console strong {
+  display: block;
+  color: #fff;
+  margin-bottom: 5px;
+  font-size: 12px;
+}
+
+.debug-log-item {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 2px 0;
+  word-break: break-all;
 }
