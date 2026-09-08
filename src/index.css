@@ -267,6 +267,8 @@ input[type=number] {
 .fullscreen-reader {
   position: absolute !important;
   top: 0;
+}
+
 /* Header Text over Video */
 .scanner-header-overlay {
   position: absolute;
