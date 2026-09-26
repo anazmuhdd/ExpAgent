@@ -39,6 +39,7 @@ export default function ScannerOverlay({ onCancel, onScanSuccess }) {
             deviceId: deviceId ? { exact: deviceId } : undefined,
             facingMode: deviceId ? undefined : 'environment'
           }}
+          scanDelay={100}
           allowMultiple={true}
         />
       </div>
